@@ -55,6 +55,7 @@ class CNN_Head(nn.Module):
         if(self.hook_mode=='train' and not(config['mode']=='pingpong')):
             x.register_hook(self.activations_hook)
         
+        """
         x = self.network[0](x)
         x = self.activation(x)
         if(self.pretrain==True):
@@ -63,6 +64,15 @@ class CNN_Head(nn.Module):
         x = self.activation(x)
         if(self.pretrain==True):
             x = self.dropout(x)
+        """
+        
+        # TJ Edit Jan 7 2021 - Iterative forward pass for different architectures
+        for i in range(len(config['head_architecture'])):
+            x = self.network[i](x)
+            x = self.activation(x)
+            if(self.pretrain==True):
+                x = self.dropout(x)
+        
         x = self.softmax(x)
         
         return x

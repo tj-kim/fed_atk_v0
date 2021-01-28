@@ -28,15 +28,28 @@ class CNN_Neck(nn.Module):
             self.loss_critereon = nn.L1Loss(size_average=False)
         self.activation     = nn.LeakyReLU(float(config['leaky_alpha']))
         self.pooling = MaxPool2d(kernel_size=config['maxpool_kernel_size'], stride=config['maxpool_stride'])
+        
+        # Add convolutional Layers
+        init_idx = 0
         for layer in config['neck_architecture']:
-            self.network.append(Conv2d(layer[0], layer[1], kernel_size=config['kernel_size'], stride=config['stride'], padding=config['padding']))
+            self.network.append(Conv2d(layer[0], layer[1], kernel_size=config['kernel_size'], 
+                                       stride=config['stride'], padding=config['padding']))
+        
+        self.network.append(nn.BatchNorm1d(num_features=config['neck_architecture'][-1][-1]*25).cuda())
+        
+        # Add Linear Layers
+        for layer in config['neck_architecture_lin']:
+            self.network.append(Linear(layer[0],layer[1]))
         
         self.optimizer      = optim.Adam(self.parameters(),lr=float(config['head_lr']))
         
-        for idx in range(len(self.network)):    
-            torch.nn.init.xavier_uniform_(self.network[idx].weight)
+        # Initialize weights for layers that don't raise error
+        for idx in range(len(self.network)):  
+            try:
+                torch.nn.init.xavier_uniform_(self.network[idx].weight)
+            except:
+                continue
 		
-        self.network.append(nn.BatchNorm1d(num_features=config['neck_architecture'][-1][-1]*25).cuda())
         
         if(self.mode=='cuda'):
             self.network 		= self.network.cuda()
@@ -45,12 +58,17 @@ class CNN_Neck(nn.Module):
             
         self.gradients = None
         
+        # Bring in head components
+        self.hook_mode = 'train'
+        self.pretrain = False
+        
     def activations_hook(self, grad):
         self.gradients = grad
          
     def forward(self,x):
         x = x.cuda()
         
+        """
         x = self.network[0](x)
         x = self.pooling(x)
         x = self.activation(x)
@@ -59,6 +77,26 @@ class CNN_Neck(nn.Module):
         x = self.activation(x)
         x = x.view(x.size(0), -1)
         x = self.network[2](x)
+        """
+        
+        # TJ Edit Jan 7 2021 - Iterative forward pass for different architectures
+        for i in range(len(config['neck_architecture'])):
+            x = self.network[i](x)
+            x = self.pooling(x)
+            x = self.activation(x)
+           
+        x = x.view(x.size(0), -1)
+        x = self.network[i+1](x)
+        
+        # Head Mode
+        if(self.hook_mode=='train' and not(config['mode']=='pingpong')):
+            x.register_hook(self.activations_hook)
+        
+        for j in range(len(config['neck_architecture_lin'])):
+            x = self.network[j+i+2](x)
+            x = self.activation(x)
+            if(self.pretrain==True):
+                x = self.dropout(x)
         
         return x
 

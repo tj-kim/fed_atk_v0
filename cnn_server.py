@@ -101,45 +101,14 @@ class Server():
         if(self.has_aggregated_parameters):
             iteration_repo = {'inputs':[],'params':[],'ids':[]}
                 
-            '''for idx in range(len(self.inputs)):
-                iteration_repo['inputs'].append([self.inputs[idx]])
-                iteration_repo['params'].append([self.params[idx]])
-                iteration_repo['ids'].append([self.ids[idx]])'''
-                
             iteration_repo['inputs'] = self.inputs
             iteration_repo['params'] = self.params
             iteration_repo['ids'] = self.ids
             
             total_loss = 0
-            
-            '''for idx in range(len(config['head_architecture'])):
-                weights = torch.zeros_like(self.head_networks[self.ids[0][0]][0][idx])
-                biases  = torch.zeros_like(self.head_networks[self.ids[0][0]][1][idx])
-                for key in self.head_networks:
-                    weights+=(torch.tensor(self.head_networks[key][0][idx]))
-                    biases+=(torch.tensor(self.head_networks[key][1][idx]))
-                self.head_network.network[idx].weight.data.copy_(weights)
-                self.head_network.network[idx].bias.data.copy_(biases)'''
+
             for i in range(config['server_iterations']):
                 
-                '''batch_idx = np.random.randint(0,len(iteration_repo['params']),config['server_batch_size'])
-                
-                ip      = torch.Tensor([iteration_repo['inputs'][idx] for idx in batch_idx]).reshape(config['server_batch_size'],1,28,28)
-                target  = torch.Tensor([iteration_repo['params'][idx] for idx in batch_idx]).cuda()'''
-                
-                '''ip      = torch.Tensor(iteration_repo['inputs']).reshape(len(iteration_repo['inputs']),1,28,28)
-                target  = torch.Tensor(iteration_repo['params']).reshape(len(iteration_repo['inputs']),1,1600).cuda()
-                neck_op = self.neck_network.forward(ip)  
-                neck_op = Variable(neck_op,requires_grad=True)              
-                target  = neck_op + target
-                target  = target.detach()
-                
-                loss    = self.loss_function(neck_op,target)
-                for element in loss[0]:
-                    element[0].backward()
-                self.neck_network.optimizer.step()
-                self.neck_network.optimizer.zero_grad()'''
-
                 idx = np.random.randint(0,len(iteration_repo['params']))
                 ip      = torch.Tensor(iteration_repo['inputs'][idx]).reshape(len(iteration_repo['inputs'][idx]),1,28,28)
                 target  = torch.Tensor(iteration_repo['params'][idx]).type(torch.LongTensor).cuda()
@@ -158,9 +127,7 @@ class Server():
                 loss    = self.head_network.loss_critereon(head_op,target)
                 loss.backward()
                 self.neck_network.optimizer.step()
-                #self.head_network.optimizer.step()
                 self.neck_network.optimizer.zero_grad() 
-                #self.head_network.optimizer.zero_grad()
                 
             total_loss+=loss.cpu().detach().numpy()
             

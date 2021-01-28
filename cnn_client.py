@@ -147,10 +147,17 @@ class Client():
         else:
             with torch.no_grad():
                 
+                # Added the length of neck architecture as well
                 if(config['get_neck']):
                     for idx in range(len(config['neck_architecture'])):
                         self.neck.network[idx].weight.copy_(torch.from_numpy(self.model_data['neck_model'][idx][0]))
                         self.neck.network[idx].bias.copy_(torch.from_numpy(self.model_data['neck_model'][idx][1]))
+                        
+                    for idx2 in range(len(config['neck_architecture_lin'])):
+                        new_idx = idx2 + idx + 2
+                        self.neck.network[new_idx].weight.copy_(torch.from_numpy(self.model_data['neck_model'][new_idx][0]))
+                        self.neck.network[new_idx].bias.copy_(torch.from_numpy(self.model_data['neck_model'][new_idx][1]))
+                        
                         
                 if(config['get_head']):
                     for idx in range(len(config['head_architecture'])):
