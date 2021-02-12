@@ -284,7 +284,10 @@ class L2Adversary(object):
         inputs_tanh_var = Variable(inputs_tanh, requires_grad=False)
 
         # the one-hot encoding of `targets`
-        targets_oh = torch.zeros(targets.size() + (num_classes,))  # type: torch.FloatTensor
+        if next(model.parameters()).is_cuda:
+            targets_oh = torch.zeros(targets.size() + (num_classes,)).cuda()  # type: torch.FloatTensor
+        else:
+            targets_oh = torch.zeros(targets.size() + (num_classes,))  
         targets_oh = runutils.make_cuda_consistent(model, targets_oh)[0]
         targets_oh.scatter_(1, targets.long().unsqueeze(1), 1.0)
         targets_oh_var = Variable(targets_oh, requires_grad=False)
@@ -292,7 +295,11 @@ class L2Adversary(object):
         # the perturbation variable to optimize.
         # `pert_tanh` is essentially the adversarial perturbation in tanh-space.
         # In Carlini's code it's denoted as `modifier`
-        pert_tanh = torch.zeros(inputs.size())  # type: torch.FloatTensor
+        if next(model.parameters()).is_cuda:
+            pert_tanh = torch.zeros(inputs.size()).cuda()  # type: torch.FloatTensor
+        else:
+            pert_tanh = torch.zeros(inputs.size())  # type: torch.FloatTensor
+        
         if self.init_rand:
             nn.init.normal(pert_tanh, mean=0, std=1e-3)
         pert_tanh = runutils.make_cuda_consistent(model, pert_tanh)[0]
@@ -302,7 +309,13 @@ class L2Adversary(object):
         for sstep in range(self.binary_search_steps):
             if self.repeat and sstep == self.binary_search_steps - 1:
                 scale_consts_np = upper_bounds_np
-            scale_consts = torch.from_numpy(np.copy(scale_consts_np)).float()  # type: torch.FloatTensor
+            
+            if next(model.parameters()).is_cuda:
+                scale_consts = torch.from_numpy(np.copy(scale_consts_np)).float().cuda()  # type: torch.FloatTensor
+            else:
+                scale_consts = torch.from_numpy(np.copy(scale_consts_np)).float()  # type: torch.FloatTensor
+            
+            
             scale_consts = runutils.make_cuda_consistent(model, scale_consts)[0]
             scale_consts_var = Variable(scale_consts, requires_grad=False)
             print('Using scale consts:', list(scale_consts_np))  # FIXME
