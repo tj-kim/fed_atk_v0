@@ -21,23 +21,20 @@ import csv
 import os
 import pickle
 from torch.autograd import Variable
+import copy
 
-class Victim_NN(nn.Module):
+class Personalized_NN(nn.Module):
     """
-    Summary: 
-    
-    Pytorch NN module that takes pre-trained weights from layered personalized model
-    We also load the data-loader and give test,attack functionality
-    
+    Pytorch NN module that combines head and neck weights for a layered based sharing system
+    For training federated learning neural network.
     """
     
-    def __init__(self, head_network, neck_network, dataloader):
+    def __init__(self, head_network, neck_network):
         
         # Init attributes
-        super(Victim_NN, self).__init__()
+        super(Personalized_NN, self).__init__()
         self.head = head_network
         self.neck = neck_network
-        self.dataloader = dataloader
         self.criterion = nn.NLLLoss()
         
         # test_acc attributes
@@ -47,23 +44,14 @@ class Victim_NN(nn.Module):
         self.orig_output_sim = None
         self.adv_output_sim = None
         
-        # I_FGSM attributes
-        self.x_orig = None
-        self.x_adv = None
-        self.y_orig = None
-        self.target = None
-        
-        self.softmax_orig = None
-        self.output_orig = None
-        self.softmax_adv = None
-        self.output_adv = None
-        
-        self.orig_loss = None
-        self.adv_loss = None
-        self.orig_acc = None
-        self.adv_acc = None
+        self.orig_target_achieve = None
+        self.adv_target_achieve = None
         
     def forward(self,x):
+        
+        if torch.cuda.is_available():
+            x = x.cuda()
+        
         x = self.neck.forward(x)
         x = self.head.forward(x)
         
@@ -74,6 +62,11 @@ class Victim_NN(nn.Module):
         """
         Assume that input images are in pytorch tensor format
         """
+        self.eval()
+        
+        # Cuda Availability
+        if torch.cuda.is_available():
+            (y_orig, y_adv) = (y_orig.cuda(), y_adv.cuda())
         
         batch_size = y_orig.shape[0]
         
@@ -103,9 +96,32 @@ class Victim_NN(nn.Module):
             print(" Adv Output Similarity:", self.adv_output_sim.item())
             print("       Orig Target Hit:", self.orig_target_achieve.item())
             print("        Adv Target Hit:", self.adv_target_achieve.item())
+            
+        return (h_adv, h_orig, h_adv_category, h_orig_category)
+
+
+class Adv_NN(Personalized_NN):
+    
+    def __init__(self, head_network, neck_network, dataloader):
         
-    def i_fgsm(self, batch_size = 10, target= -1, eps=0.03, alpha=1, 
-               iteration=1, x_val_min=-1, x_val_max=1, print_info=False):
+        # Init attributes
+        super(Adv_NN, self).__init__(head_network, neck_network)
+        
+        self.dataloader = dataloader
+        self.criterion = nn.NLLLoss()
+        
+        # Attack outputs
+        self.x_orig = None
+        self.x_adv = None
+        self.y_orig = None
+        
+        self.softmax_orig = None
+        self.output_orig = None
+        self.softmax_adv = None
+        self.output_adv = None 
+        
+        
+    def i_fgsm(self, atk_params, print_info=False):
         """
         batch_size - number of images to adversarially perturb
         targetted - target class output we desire to alter all inputs into
@@ -116,11 +132,25 @@ class Victim_NN(nn.Module):
         """
         self.eval()
         
+        # Import attack parameters
+        batch_size = atk_params.batch_size
+        target= atk_params.target
+        eps= atk_params.eps
+        alpha= atk_params.alpha
+        iteration= atk_params.iteration
+        x_val_min= atk_params.x_val_min
+        x_val_max= atk_params.x_val_max
+        
         # Load data to perturb
     
         image_data = self.dataloader.load_batch(batch_size)
         self.x_orig  = torch.Tensor(image_data['input']).reshape(batch_size,1,28,28)
-        self.y_orig = torch.Tensor(image_data['label']).type(torch.LongTensor).cuda()
+        self.y_orig = torch.Tensor(image_data['label']).type(torch.LongTensor)
+        
+        if torch.cuda.is_available():
+            # self.x_orig = self.x_orig.cuda()
+            self.y_orig = self.y_orig.cuda()
+        
         self.target = target
         
         self.x_adv = Variable(self.x_orig, requires_grad=True)
@@ -176,8 +206,7 @@ class Victim_NN(nn.Module):
             print("ADV Acc    :", self.adv_acc.item())
         
         
-        
-def load_victim(idx, loader, direc):
+def load_FLNN(idx, direc, loader = None):
     # Load the corresponding head/neck network in victim nn module 
     
     if torch.cuda.is_available():
@@ -185,8 +214,8 @@ def load_victim(idx, loader, direc):
     else:
         mode = 'not_cuda'
     
-    head_nn = CNN_Head(mode)
-    neck_nn = CNN_Neck(mode)
+    head_nn = copy.deepcopy(CNN_Head(mode))
+    neck_nn = copy.deepcopy(CNN_Neck(mode))
     
     # Which network to load and directory
     exp_path = "federated_training/Results/federated_system/" + direc + "/"
@@ -196,8 +225,8 @@ def load_victim(idx, loader, direc):
     head_path = nn_path + str(idx) +"_head_network"
     neck_path = nn_path + str(idx) +"_neck_network"
 
-    head = torch.load(head_path)
-    neck = torch.load(neck_path)
+    head = copy.deepcopy(torch.load(head_path))
+    neck = copy.deepcopy(torch.load(neck_path))
 
     head_edit = OrderedDict()
     neck_edit = OrderedDict()
@@ -212,4 +241,7 @@ def load_victim(idx, loader, direc):
     head_nn.load_state_dict(head_edit)
     neck_nn.load_state_dict(neck_edit)
     
-    return Victim_NN(head_nn,neck_nn,loader)
+    if loader is None:
+        return copy.deepcopy(Personalized_NN(head_nn,neck_nn))
+    else:
+        return copy.deepcopy(Adv_NN(head_nn,neck_nn, loader))
