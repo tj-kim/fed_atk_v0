@@ -12,9 +12,8 @@ from federated_training.cnn_client import Client
 from federated_training.data_manager import DataManager
 from federated_training.utils import cuda, where
 from federated_training.utilities import freeze_layers
-# Import Custom Made Victim
-from cw_attack.cw import *
 
+from cw_attack.cw import *
 
 import numpy as np
 import torch
@@ -89,7 +88,6 @@ class Personalized_NN(nn.Module):
         self.orig_target_achieve = (h_orig_category == target).float().sum()/batch_size
         self.adv_target_achieve = (h_adv_category == target).float().sum()/batch_size
 
-        
         # Print Relevant Information
         if print_info:
             print("---- Attack Transfer:", "----\n")
@@ -178,36 +176,13 @@ class Adv_NN(Personalized_NN):
             self.x_adv = torch.clamp(self.x_adv, x_val_min, x_val_max)
             self.x_adv = Variable(self.x_adv.data, requires_grad=True)
 
-        self.softmax_orig = self.forward(self.x_orig)
-        self.output_orig = torch.argmax(self.softmax_orig,dim=1)
-        self.softmax_adv = self.forward(self.x_adv)
-        self.output_adv = torch.argmax(self.softmax_adv,dim=1)
-        
-        # Record accuracy and loss
-        self.orig_loss = self.criterion(self.softmax_orig, self.y_orig).item()
-        self.adv_loss = self.criterion(self.softmax_adv, self.y_orig).item()
-        self.orig_acc = (self.output_orig == self.y_orig).float().sum()/batch_size
-        self.adv_acc = (self.output_adv == self.y_orig).float().sum()/batch_size
-        
-        # Add Perturbation Distance (L2 norm) - across each input
-        self.norm = torch.norm(torch.sub(self.x_orig, self.x_adv, alpha=1),dim=(2,3))
-
-        # Print Relevant Information
-        if print_info:
-            print("---- FGSM Batch Size:", batch_size, "----\n")
-            print("Orig Target:", self.y_orig.tolist())
-            print("Orig Output:", self.output_orig.tolist())
-            print("ADV Output :", self.output_adv.tolist(),'\n')
-            print("Orig Loss  :", self.orig_loss)
-            print("ADV Loss   :", self.adv_loss,'\n')
-            print("Orig Acc   :", self.orig_acc.item())
-            print("ADV Acc    :", self.adv_acc.item())
-            
+        self.post_attack(batch_size = batch_size, print_info = print_info)
     
     def CW_attack(self, attack_params, print_info=False):
         
         self.eval()
         
+        # copy attack parameters
         batch_size = attack_params.batch_size
         target= attack_params.target
         confidence= attack_params.confidence
@@ -252,6 +227,13 @@ class Adv_NN(Personalized_NN):
         
         self.x_adv = adversary(self, x_orig, targets, to_numpy=False)
         
+        self.post_attack(batch_size = batch_size, print_info = print_info)
+            
+    def post_attack(self, batch_size, print_info = False):
+        """
+        Computes attack success metrics after xadv is generated
+        """
+                
         self.softmax_orig = self.forward(self.x_orig)
         self.output_orig = torch.argmax(self.softmax_orig,dim=1)
         self.softmax_adv = self.forward(self.x_adv)
