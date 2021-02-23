@@ -109,7 +109,7 @@ class Adv_NN(Personalized_NN):
         super(Adv_NN, self).__init__(head_network, neck_network)
         
         self.dataloader = dataloader
-        self.criterion = nn.NLLLoss()
+        # self.criterion = nn.NLLLoss()
         
         # Attack outputs
         self.x_orig = None
