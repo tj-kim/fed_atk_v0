@@ -1,5 +1,5 @@
 # Experiment Arguments
-experiment_name     : 'exp2_neck2_head3'
+experiment_name     : 'exp3_neck2_0_head3'
 mode                : 'gradient'
 iterations          : 500
 batch_size          : 256
