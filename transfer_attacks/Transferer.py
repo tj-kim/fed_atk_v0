@@ -3,6 +3,8 @@ import yaml
 # Import Custom Made Victim
 from transfer_attacks.Personalized_NN import *
 from transfer_attacks.Params import *
+from transfer_attacks.Attack_Metrics import *
+from configs.overwrite_config import *
             
 class Transferer(): 
     """
@@ -14,6 +16,9 @@ class Transferer():
     def __init__(self, filename:str, config_name = None):
         
         # TO IMPLEMENT - Overwrite current file with config_name
+        overwrite_config(filename)
+        
+        # Load config file 
         with open(r'configs/config.yaml') as file:
             self.config = yaml.load(file, Loader=yaml.FullLoader)
             
