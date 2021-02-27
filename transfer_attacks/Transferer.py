@@ -3,8 +3,7 @@ import yaml
 # Import Custom Made Victim
 from transfer_attacks.Personalized_NN import *
 from transfer_attacks.Params import *
-
-
+            
 class Transferer(): 
     """
     - Collect all the FL NN 
@@ -46,6 +45,11 @@ class Transferer():
         self.y_true = None
         self.x_adv = None
         self.y_adv = None
+        
+        # Transferability Metrics
+        self.metric_variance = None # Single value
+        self.metric_alignment = {} # Dict - key is victim NN id
+        self.metric_ingrad = {} # Dict - key is victim NN id
         
     def generate_advNN(self, client_idx):
         """
@@ -123,4 +127,31 @@ class Transferer():
             self.adv_acc_transfers[i] = self.victims[i].adv_test_acc
             self.adv_similarities[i] = self.victims[i].adv_output_sim
             self.adv_target_hit[i] = self.victims[i].adv_target_achieve
-                    
+            
+    def check_empirical_metrics(self, orig_flag = True, batch_size = 1000):
+        """
+        Computes the following for the following models:
+        - Size of input gradient - across data distribution across all victim NN
+        - Gradient Alignment - Between the surrogate and each of the victim NN
+        - Variance of loss - Just for the surrogate
+        
+        - Orig flag false uses new fresh data as inputs instead of xorig and yorig
+          (used to attack victims)
+        """
+        
+        # Load a Sample of data from the datalaoder
+        if not orig_flag:
+            image_data = self.advNN.dataloader.load_batch(batch_size)
+            data_x  = torch.Tensor(image_data['input']).reshape(batch_size,1,28,28)
+            data_y = torch.Tensor(image_data['label']).type(torch.LongTensor)
+
+            if torch.cuda.is_available():
+                data_y = data_y.cuda()
+        else:
+            data_x = self.x_orig
+            data_y = self.y_orig
+        
+        self.metric_variance = calcNN_variance(self.advNN, data_x, data_y)
+        for i in range(len(self.victims)):
+            self.metric_alignment[i] = calcNN_alignment(self.advNN, self.victims[i], data_x, data_y) 
+            self.metric_ingrad[i] = calcNN_ingrad(self.victims[i],data_x,data_y) 
