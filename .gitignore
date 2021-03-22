@@ -1,0 +1,3 @@
+# Ignore Federated training folder
+federated_training/leaf/
+federated_training/Results/

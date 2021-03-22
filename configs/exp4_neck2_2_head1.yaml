@@ -1,5 +1,5 @@
 # Experiment Arguments
-experiment_name     : 'exp4_neck2_0_head3'
+experiment_name     : 'exp4_neck2_2_head1'
 mode                : 'gradient'
 iterations          : 500
 batch_size          : 256
@@ -11,7 +11,7 @@ pretrain            : 1000
 
 # Neck Network Hyperparameters  
 neck_architecture   : [[1,64],[64,16]]
-neck_architecture_lin : [] 
+neck_architecture_lin : [[400,256],[256,140]] 
 kernel_size         : 5
 stride              : 1
 padding             : 1
@@ -23,7 +23,7 @@ client_train        : False
 server_batch_size   : 128
 
 # Head Network Hyperparameters
-head_architecture   : [[400,256],[256,140],[140,63]]
+head_architecture   : [[140,63]]
 head_lr             : 2e-4
 leaky_alpha         : -0.1
 client_iterations   : 100
