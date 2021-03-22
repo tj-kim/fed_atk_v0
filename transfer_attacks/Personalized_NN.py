@@ -43,11 +43,22 @@ class Personalized_NN(nn.Module):
         self.orig_test_acc = None
         self.adv_test_acc = None
         
+        # Split Test att
+        self.orig_test_acc_robust = None
+        self.orig_output_sim_robust = None
+        self.orig_test_acc_adv = None
+        self.orig_output_sim_adv = None
+        
+        
         self.orig_output_sim = None
         self.adv_output_sim = None
         
         self.orig_target_achieve = None
         self.adv_target_achieve = None
+        
+        # Log correct vs. Incorrect Indices
+        self.adv_indices = None # tensor List of indices from batch that are fooled
+        self.robust_indices = None # List of indices from batch robust
         
     def forward(self,x):
         
@@ -87,6 +98,18 @@ class Personalized_NN(nn.Module):
         
         self.orig_target_achieve = (h_orig_category == target).float().sum()/batch_size
         self.adv_target_achieve = (h_adv_category == target).float().sum()/batch_size
+        
+        # Record based on indices
+        self.adv_indices = h_adv_category == target
+        self.robust_indices = h_adv_category != target
+        
+        # Record split losses
+        self.orig_test_acc_robust = (h_orig_category[self.robust_indices] == true_labels[self.robust_indices]).float().sum()/h_orig_category[self.robust_indices].shape[0]
+        self.orig_output_sim_robust = (h_orig_category[self.robust_indices] == y_orig[self.robust_indices]).float().sum()/h_orig_category[self.robust_indices].shape[0]
+        
+        self.orig_test_acc_adv = (h_orig_category[self.adv_indices] == true_labels[self.adv_indices]).float().sum()/h_orig_category[self.adv_indices].shape[0]
+        self.orig_output_sim_adv = (h_orig_category[self.adv_indices] == y_orig[self.adv_indices]).float().sum()/h_orig_category[self.adv_indices].shape[0]
+            
 
         # Print Relevant Information
         if print_info:
@@ -122,7 +145,7 @@ class Adv_NN(Personalized_NN):
         self.output_adv = None 
         
         
-    def i_fgsm(self, atk_params, print_info=False):
+    def i_fgsm(self, atk_params, print_info=False, mode = 'test'):
         """
             Perform IFSGM attack on a randomly sampled batch 
             All attack params and batch sizes are defiend in atk_params
@@ -140,7 +163,7 @@ class Adv_NN(Personalized_NN):
         
         # Load data to perturb
     
-        image_data = self.dataloader.load_batch(batch_size)
+        image_data = self.dataloader.load_batch(batch_size, mode=mode)
         self.x_orig  = torch.Tensor(image_data['input']).reshape(batch_size,1,28,28)
         self.y_orig = torch.Tensor(image_data['label']).type(torch.LongTensor)
         
@@ -178,7 +201,7 @@ class Adv_NN(Personalized_NN):
 
         self.post_attack(batch_size = batch_size, print_info = print_info)
     
-    def CW_attack(self, attack_params, print_info=False):
+    def CW_attack(self, attack_params, print_info=False, mode='test'):
         
         self.eval()
         
@@ -195,7 +218,7 @@ class Adv_NN(Personalized_NN):
         inputs_box = (min((0 - m) / s for m, s in zip(x_val_mean, x_val_std)),
                            max((1 - m) / s for m, s in zip(x_val_mean, x_val_std)))
         
-        image_data = self.dataloader.load_batch(batch_size)
+        image_data = self.dataloader.load_batch(batch_size, mode=mode)
         self.x_orig  = torch.Tensor(image_data['input']).reshape(batch_size,1,28,28)
         self.y_orig = torch.Tensor(image_data['label']).type(torch.LongTensor)
         self.target = target
@@ -268,19 +291,28 @@ def load_FLNN(idx, direc, loader = None):
     else:
         mode = 'not_cuda'
     
-    head_nn = copy.deepcopy(CNN_Head(mode))
-    neck_nn = copy.deepcopy(CNN_Neck(mode))
+    head_nn = CNN_Head(mode)
+    neck_nn = CNN_Neck(mode)
     
     # Which network to load and directory
     exp_path = "federated_training/Results/federated_system/" + direc + "/"
     nn_path = exp_path + direc + "_"
-
+    
     # Load pre-trained weights
     head_path = nn_path + str(idx) +"_head_network"
     neck_path = nn_path + str(idx) +"_neck_network"
 
-    head = copy.deepcopy(torch.load(head_path))
-    neck = copy.deepcopy(torch.load(neck_path))
+    """
+    print("load_FLNN exppath:", head_path)
+    print("load_FLNN exppath:", neck_path)
+    print("head_nn \n", head_nn)
+    print("neck_nn \n",neck_nn)
+    print(head_nn.config)
+    print(neck_nn.config)
+    """
+    
+    head = torch.load(head_path)
+    neck = torch.load(neck_path)
 
     head_edit = OrderedDict()
     neck_edit = OrderedDict()
@@ -296,6 +328,6 @@ def load_FLNN(idx, direc, loader = None):
     neck_nn.load_state_dict(neck_edit)
     
     if loader is None:
-        return copy.deepcopy(Personalized_NN(head_nn,neck_nn))
+        return Personalized_NN(head_nn,neck_nn)
     else:
-        return copy.deepcopy(Adv_NN(head_nn,neck_nn, loader))
+        return Adv_NN(head_nn,neck_nn, loader)

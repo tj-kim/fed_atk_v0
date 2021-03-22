@@ -298,8 +298,8 @@ class Client():
             #self.set_lock()
         
         ''' Exit process '''
-        np.save("Results/federated_system/"+config['experiment_name']+'/'+self.name+'_testing_accuracy'+self.name,np.array(self.test_log))
-        np.save("Results/federated_system/"+config['experiment_name']+'/'+self.name+'_training_accuracy'+self.name,np.array(self.train_log))
+        np.save("federated_training/Results/federated_system/"+config['experiment_name']+'/'+self.name+'_testing_accuracy'+self.name,np.array(self.test_log))
+        np.save("federated_training/Results/federated_system/"+config['experiment_name']+'/'+self.name+'_training_accuracy'+self.name,np.array(self.train_log))
         queues = [self.param_queue,self.model_queue]
         
         for q in queues:

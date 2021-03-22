@@ -7,11 +7,11 @@ class IFSGM_Params():
     def __init__(self):
         
         # Attack Params
-        self.batch_size = 10
+        self.batch_size = 1000
         self.eps = 0.1
         self.alpha = 0.01
-        self.iteration = 100
-        self.target = 20
+        self.iteration = 10
+        self.target = 15
         self.x_val_min = 0
         self.x_val_max = 1
         
@@ -44,10 +44,10 @@ class CW_Params():
     def __init__(self):
         
         # Attack Params
-        self.batch_size = 10
+        self.batch_size = 500
         self.confidence = 20 # AKA Transferability metric
         self.optimizer_lr = 5e-4 
-        self.iteration = 100
+        self.iteration = 20
         self.target = 20
         self.x_val_mean = [0.5]
         self.x_val_std = [0.5]

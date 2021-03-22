@@ -1,0 +1,28 @@
+experiment_name           : individual_head_networks
+mode                      : gradient
+iterations                : 500
+batch_size                : 256
+num_clients               : 8
+femnist_fraction          : 0.1
+upload_fraction           : 1
+num_sets                  : 32
+pretrain                  : 1000
+"neck_architecture         : [[1, 64], [64, 16]]"
+kernel_size               : 5
+stride                    : 1
+padding                   : 1
+maxpool_kernel_size       : 2
+maxpool_stride            : 2
+neck_lr                   : 2e-5
+server_iterations         : 20
+client_train              : False
+server_batch_size         : 128
+"head_architecture         : [[400, 256], [256, 63]]"
+head_lr                   : 2e-4
+leaky_alpha               : -0.1
+client_iterations         : 100
+upload_prob               : 100
+dropout                   : 0.2
+get_head                  : False
+get_neck                  : True
+client_batch_size         : 16

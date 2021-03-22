@@ -10,41 +10,41 @@ import torch.nn as nn
 from torch.nn import Linear, ReLU, CrossEntropyLoss, Sequential, Conv2d, MaxPool2d, Module, Softmax, BatchNorm2d, Dropout
 import torch.optim as optim
 import yaml
-
-with open(r'configs/config.yaml') as file:
-    config = yaml.load(file, Loader=yaml.FullLoader)
     
 class CNN_Neck(nn.Module):
     
     def __init__(self,mode):
         super(CNN_Neck, self).__init__()
         
+        with open(r'configs/config.yaml') as file:
+            self.config = yaml.load(file, Loader=yaml.FullLoader)
+        
         self.mode = mode        
         self.network = nn.ModuleList([])
         
-        if(config['mode']=='pingpong'):
+        if(self.config['mode']=='pingpong'):
             self.loss_critereon = nn.NLLLoss()
         else:
             self.loss_critereon = nn.L1Loss(size_average=False)
-        self.activation     = nn.LeakyReLU(float(config['leaky_alpha']))
-        self.pooling = MaxPool2d(kernel_size=config['maxpool_kernel_size'], stride=config['maxpool_stride'])
+        self.activation     = nn.LeakyReLU(float(self.config['leaky_alpha']))
+        self.pooling = MaxPool2d(kernel_size=self.config['maxpool_kernel_size'], stride=self.config['maxpool_stride'])
         
         # Add convolutional Layers
         init_idx = 0
-        for layer in config['neck_architecture']:
-            self.network.append(Conv2d(layer[0], layer[1], kernel_size=config['kernel_size'], 
-                                       stride=config['stride'], padding=config['padding']))
+        for layer in self.config['neck_architecture']:
+            self.network.append(Conv2d(layer[0], layer[1], kernel_size=self.config['kernel_size'], 
+                                       stride=self.config['stride'], padding=self.config['padding']))
         
         if(self.mode=='cuda'):
-            self.network.append(nn.BatchNorm1d(num_features=config['neck_architecture'][-1][-1]*25).cuda())
+            self.network.append(nn.BatchNorm1d(num_features=self.config['neck_architecture'][-1][-1]*25).cuda())
         else:
-            self.network.append(nn.BatchNorm1d(num_features=config['neck_architecture'][-1][-1]*25))
+            self.network.append(nn.BatchNorm1d(num_features=self.config['neck_architecture'][-1][-1]*25))
         
         # Add Linear Layers
-        for layer in config['neck_architecture_lin']:
+        for layer in self.config['neck_architecture_lin']:
             self.network.append(Linear(layer[0],layer[1]))
         
-        self.optimizer      = optim.Adam(self.parameters(),lr=float(config['head_lr']))
+        self.optimizer      = optim.Adam(self.parameters(),lr=float(self.config['head_lr']))
         
         # Initialize weights for layers that don't raise error
         for idx in range(len(self.network)):  
@@ -74,7 +74,7 @@ class CNN_Neck(nn.Module):
             x = x.cuda()
         
         # TJ Edit Jan 7 2021 - Iterative forward pass for different architectures
-        for i in range(len(config['neck_architecture'])):
+        for i in range(len(self.config['neck_architecture'])):
             x = self.network[i](x)
             x = self.pooling(x)
             x = self.activation(x)
@@ -83,10 +83,10 @@ class CNN_Neck(nn.Module):
         x = self.network[i+1](x)
         
         # Head Mode
-        if(self.hook_mode=='train' and not(config['mode']=='pingpong')):
+        if(self.hook_mode=='train' and not(self.config['mode']=='pingpong')):
             x.register_hook(self.activations_hook)
         
-        for j in range(len(config['neck_architecture_lin'])):
+        for j in range(len(self.config['neck_architecture_lin'])):
             x = self.network[j+i+2](x)
             x = self.activation(x)
             if(self.pretrain==True):

@@ -37,7 +37,7 @@ if __name__ == '__main__':
   
     ''' Create Experiment Specific Files and Parameters '''
     
-    with open(r'config.yaml') as file:
+    with open(r'configs/config.yaml') as file:
         config = yaml.load(file, Loader=yaml.FullLoader)
     mode = 'cuda'
     exp_path = "Results/federated_system/"+config['experiment_name']+'/'

@@ -32,7 +32,27 @@ class Transferer():
         self.adv_similarities = {}
         self.adv_target_hit = {}
         
+        # Robust-fooled versions
+        self.orig_acc_transfers_robust = {}
+        self.orig_similarities_robust = {}
+        
+        self.orig_acc_transfers_adv = {}
+        self.orig_similarities_adv = {}
+        
+        # Attack success indices
+        self.adv_indices = {}
+        self.robust_indices = {}
+        
         # Matrix to Record Performance (New Metrics - theoretical)
+        self.metric_variance = None # Single value
+        self.metric_alignment = {} # Dict - key is victim NN id
+        self.metric_ingrad = {} # Dict - key is victim NN id
+        
+        self.metric_alignment_robust = {} # Dict - key is victim NN id
+        self.metric_ingrad_robust = {} # Dict - key is victim NN id
+        
+        self.metric_alignment_adv = {} # Dict - key is victim NN id
+        self.metric_ingrad_adv = {} # Dict - key is victim NN id
         
         # Attack Params
         self.ifsgm_params = IFSGM_Params()
@@ -50,11 +70,7 @@ class Transferer():
         self.y_true = None
         self.x_adv = None
         self.y_adv = None
-        
-        # Transferability Metrics
-        self.metric_variance = None # Single value
-        self.metric_alignment = {} # Dict - key is victim NN id
-        self.metric_ingrad = {} # Dict - key is victim NN id
+
         
     def generate_advNN(self, client_idx):
         """
@@ -78,19 +94,19 @@ class Transferer():
         
         return
     
-    def generate_xadv(self, atk_type = "IFSGM"):
+    def generate_xadv(self, atk_type = "IFSGM", mode='test'):
         """
         Generate perturbed images
         atk_type - "IFSGM" or "CW"
         """
         
         if (atk_type == "IFSGM") or (atk_type == "ifsgm"): 
-            self.advNN.i_fgsm(self.ifsgm_params)
+            self.advNN.i_fgsm(self.ifsgm_params, mode=mode)
         elif (atk_type == "CW") or (atk_type == "cw"):
-            self.advNN.CW_attack(self.cw_params)
+            self.advNN.CW_attack(self.cw_params,mode=mode)
         else:
             print("Attak type unidentified -- Running IFSGM")
-            self.advNN.i_fgsm(self.ifsgm_params)
+            self.advNN.i_fgsm(self.ifsgm_params, mode=mode)
         
         # Record relevant tensors
         self.x_orig = self.advNN.x_orig
@@ -119,19 +135,32 @@ class Transferer():
         """
         
         for i in client_idxs:
+          
             self.victims[i].forward_transfer(self.x_orig,self.x_adv,
                                          self.y_orig,self.y_adv,
                                          self.y_true, self.ifsgm_params.target, 
                                          print_info=False)
-            
+
+            # Record Performance
+            self.orig_acc_transfers_robust[i] = self.victims[i].orig_test_acc_robust
+            self.orig_similarities_robust[i] = self.victims[i].orig_output_sim_robust
+
+            self.orig_acc_transfers_adv[i] = self.victims[i].orig_test_acc_adv
+            self.orig_similarities_adv[i] = self.victims[i].orig_output_sim_adv
+                
             # Record Performance
             self.orig_acc_transfers[i] = self.victims[i].orig_test_acc
             self.orig_similarities[i] = self.victims[i].orig_output_sim
+                
             self.orig_target_hit[i] = self.victims[i].orig_target_achieve
 
             self.adv_acc_transfers[i] = self.victims[i].adv_test_acc
             self.adv_similarities[i] = self.victims[i].adv_output_sim
             self.adv_target_hit[i] = self.victims[i].adv_target_achieve
+
+            # Record indices
+            self.adv_indices[i] = self.victims[i].adv_indices
+            self.robust_indices[i] = self.victims[i].robust_indices
             
     def check_empirical_metrics(self, orig_flag = True, batch_size = 1000):
         """
@@ -145,18 +174,45 @@ class Transferer():
         """
         
         # Load a Sample of data from the datalaoder
-        if not orig_flag:
+        if orig_flag: # Split between fooled and not fooled
+
+            self.metric_variance = calcNN_variance(self.advNN, self.x_orig, self.y_orig)
+            # For robust data
+            for i in range(len(self.victims)):
+                data_x = self.x_orig[self.robust_indices[i]]
+                data_y = self.y_orig[self.robust_indices[i]]
+                
+                if (data_y.numel()):
+                    self.metric_alignment_robust[i] = calcNN_alignment(self.advNN, self.victims[i], data_x, data_y) 
+                    self.metric_ingrad_robust[i] = calcNN_ingrad(self.victims[i],data_x,data_y)
+                else:
+                    self.metric_alignment_robust[i] = 0
+                    self.metric_ingrad_robust[i] = 0
+                
+                data_x = self.x_orig[self.adv_indices[i]]
+                data_y = self.y_orig[self.adv_indices[i]]
+                
+                if (data_y.numel()):
+                    self.metric_alignment_adv[i] = calcNN_alignment(self.advNN, self.victims[i], data_x, data_y) 
+                    self.metric_ingrad_adv[i] = calcNN_ingrad(self.victims[i],data_x,data_y) 
+                else:
+                    self.metric_alignment_adv[i] = 0
+                    self.metric_ingrad_adv[i] = 0
+
+                self.metric_alignment[i] = calcNN_alignment(self.advNN, self.victims[i], data_x, data_y) 
+                self.metric_ingrad[i] = calcNN_ingrad(self.victims[i],data_x,data_y)
+        
+        else: # Take measurements across all points
             image_data = self.advNN.dataloader.load_batch(batch_size)
             data_x  = torch.Tensor(image_data['input']).reshape(batch_size,1,28,28)
             data_y = torch.Tensor(image_data['label']).type(torch.LongTensor)
 
             if torch.cuda.is_available():
                 data_y = data_y.cuda()
-        else:
-            data_x = self.x_orig
-            data_y = self.y_orig
-        
-        self.metric_variance = calcNN_variance(self.advNN, data_x, data_y)
-        for i in range(len(self.victims)):
-            self.metric_alignment[i] = calcNN_alignment(self.advNN, self.victims[i], data_x, data_y) 
-            self.metric_ingrad[i] = calcNN_ingrad(self.victims[i],data_x,data_y) 
+
+            self.metric_variance = calcNN_variance(self.advNN, data_x, data_y)
+            for i in range(len(self.victims)):
+                self.metric_alignment[i] = calcNN_alignment(self.advNN, self.victims[i], data_x, data_y) 
+                self.metric_ingrad[i] = calcNN_ingrad(self.victims[i],data_x,data_y)
+            
+            
