@@ -23,6 +23,14 @@ class DA_Transferer(Transferer):
         self.DA_intermed = {}
         self.loader_i = {}
         
+        # Split ADV and ROBUST DAta
+        self.adv_DA_x = {}
+        self.adv_DA_y = {}
+        self.robust_DA_x = {}
+        self.robust_DA_y = {}
+        self.adv_DA_intermed = {}
+        self.robust_DA_intermed = {}
+        
         # Data division information
         self.mode = None
         self.client_idxs = None
@@ -30,6 +38,8 @@ class DA_Transferer(Transferer):
         
         # Gaussian Extraction
         self.gaussian_ustd= {}
+        self.adv_gaussian_ustd = {}
+        self.robust_gaussian_ustd = {}
         
         # PCA Extraction
         self.PCA_data= {}
@@ -70,7 +80,7 @@ class DA_Transferer(Transferer):
         self.classes = classes
         self.DA_x = {} # Reset
         self.DA_y = {}
-        
+
         
         # store data differently based on what the desired mode is
         if mode == 'client':
@@ -125,6 +135,25 @@ class DA_Transferer(Transferer):
         else:
             raise Exception("Invalid data analysis mode") 
         
+    def set_data_advNN(self):
+        """
+        Extract data from ADV NN that were used to fool other neural networks
+        Make sure the mode is set to "client" no matter what
+        """
+
+        # RESET
+        self.adv_DA_x = {}
+        self.adv_DA_y = {}
+        self.robust_DA_x = {}
+        self.robust_DA_y = {}
+        
+        for idx in self.victim_idxs:
+            self.adv_DA_x[idx] = self.x_orig[self.adv_indices[idx]]
+            self.adv_DA_y[idx] = self.y_orig[self.adv_indices[idx]]
+            self.robust_DA_x[idx] = self.x_orig[self.robust_indices[idx]]
+            self.robust_DA_y[idx] = self.x_orig[self.robust_indices[idx]]
+
+    
     def forward_neck(self, x):
         """
         Only forward through neck to get upto intermediate flattened layer
@@ -143,10 +172,18 @@ class DA_Transferer(Transferer):
         self.advNN.eval()
         
         self.DA_intermed = {}
+        self.adv_DA_intermed = {}
+        self.robust_DA_intermed = {}
 
         if self.mode == 'client' or self.mode == 'class':
             for client_idx, value in self.DA_x.items():
                 self.DA_intermed[client_idx] = self.forward_neck(value)
+                
+            for client_idx, value in self.adv_DA_x.items():
+                self.adv_DA_intermed[client_idx] = self.forward_neck(value)
+            
+            for client_idx, value in self.robust_DA_x.items():
+                self.robust_DA_intermed[client_idx] = self.forward_neck(value)
 
         elif self.mode == 'both':
             for client_idx, classes in self.DA_x.items():
@@ -162,6 +199,8 @@ class DA_Transferer(Transferer):
         
         # Reset Dictionary
         self.gaussian_ustd= {}
+        self.adv_gaussian_ustd = {}
+        self.robust_gaussian_ustd = {}
         
         if self.mode == 'client':
             self.gaussian_ustd['info'] = ("mean","std","client")
@@ -170,6 +209,18 @@ class DA_Transferer(Transferer):
                 data = transferer.DA_intermed[client_idx]
                 self.gaussian_ustd[client_idx]['mean'] = torch.mean(data,0)
                 self.gaussian_ustd[client_idx]['std'] = torch.std(data,0)
+                
+            for client_idx in self.adv_DA_x.keys():
+                self.adv_gaussian_ustd[client_idx] = {}
+                data = transferer.adv_DA_intermed[client_idx]
+                self.adv_gaussian_ustd[client_idx]['mean'] = torch.mean(data,0)
+                self.adv_gaussian_ustd[client_idx]['std'] = torch.std(data,0)
+                
+            for client_idx in self.robust_DA_x.keys():
+                self.robust_gaussian_ustd[client_idx] = {}
+                data = transferer.robust_DA_intermed[client_idx]
+                self.robust_gaussian_ustd[client_idx]['mean'] = torch.mean(data,0)
+                self.robust_gaussian_ustd[client_idx]['std'] = torch.std(data,0)
                 
         elif self.mode == 'class':
             self.gaussian_ustd['info'] = ("mean","std","class")
@@ -189,7 +240,7 @@ class DA_Transferer(Transferer):
                     self.gaussian_ustd[client_idx][class_idx]['mean'] = torch.mean(data,0)
                     self.gaussian_ustd[client_idx][class_idx]['std'] = torch.std(data,0)
     
-    def obtain_PCA(self, dim=2):
+    def obtain_PCA(self, analyze_atk = False, advrobust_idx = 1, dim=2):
         """
         Dimension reduction per data point from 400 --> 2 for all data points
         https://github.com/mGalarnyk/Python_Tutorials/blob/master/Sklearn/PCA/PCA_Data_Visualization_Iris_Dataset_Blog.ipynb
@@ -204,11 +255,25 @@ class DA_Transferer(Transferer):
         # Convert data to numpy and gather them together 
         # Keep index of each class pair in dictionary
         if self.mode == 'client':
-            indices = np.empty(0)
+            indices = np.empty((0,2)) # key(0=orig data, 1 = adv_data, 2 = robust_data)
             for client_idx in self.client_idxs:
                 new_data = self.DA_intermed[client_idx].cpu().detach().numpy()
                 data = np.append(data, new_data, axis=0)
-                index = np.ones(new_data.shape[0]) * client_idx
+                index = np.ones((new_data.shape[0],1)) * client_idx
+                index = np.append(index,(np.zeros((new_data.shape[0],1))), axis=1)
+                indices = np.append(indices, index,axis=0)
+                
+            if analyze_atk == True:
+                new_data = self.adv_DA_intermed[advrobust_idx].cpu().detach().numpy()
+                data = np.append(data, new_data, axis=0)
+                index = np.ones((new_data.shape[0],1)) * client_idx
+                index = np.append(index,(np.ones((new_data.shape[0],1))), axis=1)
+                indices = np.append(indices, index,axis=0)
+                
+                new_data = self.robust_DA_intermed[advrobust_idx].cpu().detach().numpy()
+                data = np.append(data, new_data, axis=0)
+                index = np.ones((new_data.shape[0],1)) * client_idx
+                index = np.append(index,(np.ones((new_data.shape[0],1))*2), axis=1)
                 indices = np.append(indices, index,axis=0)
                 
         elif self.mode == 'class':

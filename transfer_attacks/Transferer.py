@@ -178,7 +178,7 @@ class Transferer():
 
             self.metric_variance = calcNN_variance(self.advNN, self.x_orig, self.y_orig)
             # For robust data
-            for i in range(len(self.victims)):
+            for i in self.victim_idxs:
                 data_x = self.x_orig[self.robust_indices[i]]
                 data_y = self.y_orig[self.robust_indices[i]]
                 
