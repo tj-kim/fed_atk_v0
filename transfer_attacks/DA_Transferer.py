@@ -59,9 +59,12 @@ class DA_Transferer(Transferer):
         client_slice = len(file_indices)//self.config['num_clients']
         
         for client_idx in clients:
-            self.loader_i[client_idx] = Dataloader(file_indices,[client_idx*(client_slice),min((client_idx+1)*(client_slice),35)])  
-            self.loader_i[client_idx].load_training_dataset()
-            self.loader_i[client_idx].load_testing_dataset()
+            if client_idx != self.advNN_idx:
+                self.loader_i[client_idx] = Dataloader(file_indices,[client_idx*(client_slice),min((client_idx+1)*(client_slice),35)])  
+                self.loader_i[client_idx].load_training_dataset()
+                self.loader_i[client_idx].load_testing_dataset()
+            else:
+                self.loader_i[client_idx] = self.advNN.dataloader
         
          
     def set_data(self, mode='client', datasets = range(8), batch_size = 50, classes = [0,1]):
@@ -151,7 +154,7 @@ class DA_Transferer(Transferer):
             self.adv_DA_x[idx] = self.x_orig[self.adv_indices[idx]]
             self.adv_DA_y[idx] = self.y_orig[self.adv_indices[idx]]
             self.robust_DA_x[idx] = self.x_orig[self.robust_indices[idx]]
-            self.robust_DA_y[idx] = self.x_orig[self.robust_indices[idx]]
+            self.robust_DA_y[idx] = self.y_orig[self.robust_indices[idx]]
 
     
     def forward_neck(self, x):
@@ -180,10 +183,16 @@ class DA_Transferer(Transferer):
                 self.DA_intermed[client_idx] = self.forward_neck(value)
                 
             for client_idx, value in self.adv_DA_x.items():
-                self.adv_DA_intermed[client_idx] = self.forward_neck(value)
+                try:
+                    self.adv_DA_intermed[client_idx] = self.forward_neck(value)
+                except:
+                    pass
             
             for client_idx, value in self.robust_DA_x.items():
-                self.robust_DA_intermed[client_idx] = self.forward_neck(value)
+                try:
+                    self.robust_DA_intermed[client_idx] = self.forward_neck(value)
+                except:
+                    pass
 
         elif self.mode == 'both':
             for client_idx, classes in self.DA_x.items():
@@ -206,19 +215,19 @@ class DA_Transferer(Transferer):
             self.gaussian_ustd['info'] = ("mean","std","client")
             for client_idx in self.client_idxs:
                 self.gaussian_ustd[client_idx] = {}
-                data = transferer.DA_intermed[client_idx]
+                data = self.DA_intermed[client_idx]
                 self.gaussian_ustd[client_idx]['mean'] = torch.mean(data,0)
                 self.gaussian_ustd[client_idx]['std'] = torch.std(data,0)
                 
             for client_idx in self.adv_DA_x.keys():
                 self.adv_gaussian_ustd[client_idx] = {}
-                data = transferer.adv_DA_intermed[client_idx]
+                data = self.adv_DA_intermed[client_idx]
                 self.adv_gaussian_ustd[client_idx]['mean'] = torch.mean(data,0)
                 self.adv_gaussian_ustd[client_idx]['std'] = torch.std(data,0)
                 
             for client_idx in self.robust_DA_x.keys():
                 self.robust_gaussian_ustd[client_idx] = {}
-                data = transferer.robust_DA_intermed[client_idx]
+                data = self.robust_DA_intermed[client_idx]
                 self.robust_gaussian_ustd[client_idx]['mean'] = torch.mean(data,0)
                 self.robust_gaussian_ustd[client_idx]['std'] = torch.std(data,0)
                 
