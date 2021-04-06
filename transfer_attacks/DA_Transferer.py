@@ -275,13 +275,13 @@ class DA_Transferer(Transferer):
             if analyze_atk == True:
                 new_data = self.adv_DA_intermed[advrobust_idx].cpu().detach().numpy()
                 data = np.append(data, new_data, axis=0)
-                index = np.ones((new_data.shape[0],1)) * client_idx
+                index = np.ones((new_data.shape[0],1)) * advrobust_idx
                 index = np.append(index,(np.ones((new_data.shape[0],1))), axis=1)
                 indices = np.append(indices, index,axis=0)
                 
                 new_data = self.robust_DA_intermed[advrobust_idx].cpu().detach().numpy()
                 data = np.append(data, new_data, axis=0)
-                index = np.ones((new_data.shape[0],1)) * client_idx
+                index = np.ones((new_data.shape[0],1)) * advrobust_idx
                 index = np.append(index,(np.ones((new_data.shape[0],1))*2), axis=1)
                 indices = np.append(indices, index,axis=0)
                 
